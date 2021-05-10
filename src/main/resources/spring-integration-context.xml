@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xmlns:context="http://www.springframework.org/schema/context"
+	xmlns:int="http://www.springframework.org/schema/integration"
+	xmlns:int-jms="http://www.springframework.org/schema/integration/jms"
+	xsi:schemaLocation="http://www.springframework.org/schema/beans
+      http://www.springframework.org/schema/beans/spring-beans.xsd
+      http://www.springframework.org/schema/context
+      http://www.springframework.org/schema/context/spring-context-4.0.xsd
+      http://www.springframework.org/schema/integration
+      http://www.springframework.org/schema/integration/spring-integration.xsd
+      http://www.springframework.org/schema/integration/jms
+      https://www.springframework.org/schema/integration/jms/spring-integration-jms.xsd">
+
+	<context:property-placeholder location="classpath:application.properties" />
+
+	<int:channel id="request" />
+	<int:channel id="send-reply" />
+
+	<int-jms:message-driven-channel-adapter
+			connection-factory="connectionFactory"
+			destination-name="${artemis.queue.request}"
+			channel="request"
+			concurrent-consumers="1"
+			max-concurrent-consumers="5"
+			acknowledge="transacted"
+			error-channel="errorChannel"
+	/>
+
+	<!-- dummy pass through activator -->
+	<int:service-activator ref="activator" input-channel="request" output-channel="prepare-reply"/>
+
+	<int-jms:channel
+			id="prepare-reply"
+			queue-name="${artemis.queue.prepare-reply}"
+			connection-factory="connectionFactory"
+			acknowledge="transacted"
+			concurrency="1-5"
+	/>
+
+	<!-- dummy pass through activator -->
+	<int:service-activator ref="activator" input-channel="prepare-reply" output-channel="send-reply"/>
+
+	<int:service-activator ref="replyActivator" input-channel="send-reply" />
+
+	<bean id="connectionFactory" class="org.springframework.jms.connection.CachingConnectionFactory">
+		<property name="targetConnectionFactory">
+			<bean class="org.apache.activemq.artemis.jms.client.ActiveMQConnectionFactory">
+				<property name="user" value="${spring.artemis.user}" />
+				<property name="password" value="${spring.artemis.password}" />
+				<property name="brokerURL" value="${spring.artemis.brokerUrl}" />
+			</bean>
+		</property>
+	</bean>
+</beans>
